@@ -1,13 +1,34 @@
 const express = require("express");
 const morgan = require("morgan");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv").config();
 
 const PORT = 3000;
 
-URI =
-  "mongodb+srv://Out-A-Time:xxx>@mongodb-cluster0.99qmncj.mongodb.net/?retryWrites=true&w=majority";
+const mongoUSER = process.env.mongoUSER;
+const mongoPASSWORD = process.env.mongoPASSWORD;
+//Importing mongoDB model
+const Blog = require("./models/blog.js");
+const { render } = require("ejs");
 
 //express app
 const app = express();
+
+//Connect to mongodb
+const mongoURI = `mongodb+srv://${mongoUSER}:${mongoPASSWORD}@mongodb-cluster0.99qmncj.mongodb.net/NinjaBlog?retryWrites=true&w=majority`;
+
+mongoose
+  .connect(mongoURI)
+  .then((result) => {
+    console.log("Connected to mongoDB");
+    //Listen for requests only after connection to DB has been established!
+    app.listen(PORT, function () {
+      console.log(`Server is up and running at: http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.log(err);
+  });
 
 //register view engine
 app.set("view engine", "ejs");
@@ -25,27 +46,53 @@ app.set("view engine", "ejs");
 
 //Middleware and static files:
 app.use(express.static("public"));
+//helps to create req.body for POST request ⤵
+app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 
-//Routing
-app.get("/", (req, res) => {
-  const blogs = [
-    {
-      title: "Yoshi find eggs",
-      snippet: "Lorem ipsum dolor sit amet consectetur",
-    },
-    {
-      title: "Mario fighting with Wario",
-      snippet: "Lorem ipsum dolor sit amet consectetur",
-    },
-    {
-      title: "How to defeat Bowser",
-      snippet: "Lorem ipsum dolor sit amet consectetur",
-    },
-  ];
+//TESTING DATABASE
+//mongoose and mongo sanbox routes
+// app.get("/add-blog", (req, res) => {
+//   const blog = new Blog({
+//     title: "New Blog 2",
+//     snippet: "About my new blog",
+//     body: "more info about my new blog super extra dupa dupa",
+//   });
+//   blog
+//     .save()
+//     .then((result) => {
+//       res.send(result);
+//     })
+//     .catch((err) => {
+//       console.log(err);
+//     });
+// });
 
-  //   res.send("<h1>HELLO FROM LANDING PAGE</h1>");
-  res.render("index", { title: "Home", allBlogs: blogs }); //if allBlogs would be blogs then one blogs can be removed
+// app.get("/all-blogs", (req, res) => {
+//   Blog.find()
+//     .then((result) => {
+//       res.send(result);
+//     })
+//     .catch((err) => {
+//       console.log(err);
+//     });
+// });
+
+// app.get("/single-blog", (req, res) => {
+//   Blog.findById("6330297806805b65f3870551")
+//     .then((result) => {
+//       res.send(result);
+//     })
+//     .catch((err) => {
+//       console.log(err);
+//     });
+// });
+
+//Routes
+app.get("/", (req, res) => {
+  res.redirect("/blogs");
+
+  // res.render("index", { title: "Home", allBlogs: blogs }); //if allBlogs would be blogs then one blogs can be removed
 });
 
 app.get("/about", (req, res) => {
@@ -53,8 +100,56 @@ app.get("/about", (req, res) => {
   res.render("about", { title: "About" });
 });
 
+app.get("/blogs", (req, res) => {
+  Blog.find()
+    .sort({ createdAt: -1 })
+    .then((result) => {
+      res.render("index", { title: "All blogs", allBlogs: result });
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+});
+
+app.post("/blogs", (req, res) => {
+  console.log(req.body);
+  const blog = new Blog(req.body);
+
+  blog
+    .save()
+    .then((result) => {
+      res.redirect("/blogs");
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+});
+
 app.get("/blogs/create", (req, res) => {
   res.render("create", { title: "Create a new blog" });
+});
+
+app.get("/blogs/:id", (req, res) => {
+  const id = req.params.id;
+  Blog.findById(id)
+    .then((result) => {
+      res.render("details", { blog: result, title: "Blog Details" });
+    })
+    .catch((err) => {
+      console.log(err);
+    });
+});
+
+app.delete("/blogs/:id", (req, res) => {
+  const id = req.params.id;
+
+  Blog.findByIdAndDelete(id)
+    .then((result) => {
+      return res.json({ redirect: "/blogs" });
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 });
 
 //404 Page - default case
@@ -62,9 +157,4 @@ app.get("/blogs/create", (req, res) => {
 //Should be at the end of the all .get(), if previous paths won't match it will fire 404
 app.use((req, res) => {
   res.status(404).render("404", { title: "Error" });
-});
-
-//Listen for requests
-app.listen(PORT, function () {
-  console.log(`Server is up and running at: http://localhost:${PORT}`);
 });
